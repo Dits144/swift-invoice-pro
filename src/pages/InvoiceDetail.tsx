@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Download, Printer, ArrowLeft, Lock } from 'lucide-react';
+import { Download, Printer, ArrowLeft, Lock, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,12 +8,6 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-const logoEmojis: Record<string, string> = {
-  'default-1': '🏢', 'default-2': '🏬', 'default-3': '🏗️', 'default-4': '🏪',
-  'default-5': '🏛️', 'default-6': '📦', 'default-7': '🛒', 'default-8': '💼',
-  'default-9': '🔧', 'default-10': '🎨',
-};
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -39,11 +33,41 @@ export default function InvoiceDetail() {
     })();
   }, [id, user]);
 
-  const downloadPDF = () => {
+  const loadImageAsBase64 = (url: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  };
+
+  const downloadPDF = async () => {
     if (!invoice || !institution) return;
     const doc = new jsPDF();
 
-    // Header
+    // Try to add logo
+    if (institution.logo_url) {
+      try {
+        const base64 = await loadImageAsBase64(institution.logo_url);
+        if (base64) {
+          doc.addImage(base64, 'PNG', 150, 10, 40, 20, undefined, 'FAST');
+        }
+      } catch (e) {
+        // Logo failed to load, continue without it
+      }
+    }
+
+    // Header left
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
     doc.text('INVOICE', 14, 25);
@@ -55,12 +79,12 @@ export default function InvoiceDetail() {
     if (institution.email) doc.text(institution.email, 14, 47);
     if (institution.phone) doc.text(institution.phone, 14, 53);
 
-    // Invoice details on right
+    // Invoice number & dates on right (below logo)
     doc.setFont('helvetica', 'bold');
-    doc.text(invoice.invoice_number, 196, 25, { align: 'right' });
+    doc.text(invoice.invoice_number, 196, 38, { align: 'right' });
     doc.setFont('helvetica', 'normal');
-    doc.text(`Tanggal: ${new Date(invoice.date).toLocaleDateString('id-ID')}`, 196, 32, { align: 'right' });
-    if (invoice.due_date) doc.text(`Jatuh Tempo: ${new Date(invoice.due_date).toLocaleDateString('id-ID')}`, 196, 38, { align: 'right' });
+    doc.text(`Tanggal: ${new Date(invoice.date).toLocaleDateString('id-ID')}`, 196, 45, { align: 'right' });
+    if (invoice.due_date) doc.text(`Jatuh Tempo: ${new Date(invoice.due_date).toLocaleDateString('id-ID')}`, 196, 51, { align: 'right' });
 
     // Client
     doc.setFont('helvetica', 'bold');
@@ -129,25 +153,23 @@ export default function InvoiceDetail() {
         {/* Header */}
         <div className="mb-8 flex items-start justify-between">
           <div>
-            <div className="mb-2 flex items-center gap-3">
-              {institution?.logo_url ? (
-                <img src={institution.logo_url} alt="" className="h-12 w-12 rounded-lg object-cover" />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-2xl">
-                  {logoEmojis[institution?.logo_type || 'default-1'] || '🏢'}
-                </div>
-              )}
-              <h2 className="text-xl font-bold">{institution?.name}</h2>
-            </div>
+            <h1 className="text-2xl font-extrabold text-primary mb-1">INVOICE</h1>
+            <p className="text-lg font-semibold">{invoice.invoice_number}</p>
+            <p className="text-sm text-muted-foreground mt-1">Tanggal: {new Date(invoice.date).toLocaleDateString('id-ID')}</p>
+            {invoice.due_date && <p className="text-sm text-muted-foreground">Jatuh Tempo: {new Date(invoice.due_date).toLocaleDateString('id-ID')}</p>}
+          </div>
+          <div className="text-right flex flex-col items-end gap-2">
+            {institution?.logo_url ? (
+              <img src={institution.logo_url} alt={institution.name} className="max-h-[60px] w-auto object-contain" />
+            ) : (
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10">
+                <Building2 className="h-7 w-7 text-primary" />
+              </div>
+            )}
+            <p className="font-semibold">{institution?.name}</p>
             {institution?.address && <p className="text-sm text-muted-foreground">{institution.address}</p>}
             {institution?.email && <p className="text-sm text-muted-foreground">{institution.email}</p>}
             {institution?.phone && <p className="text-sm text-muted-foreground">{institution.phone}</p>}
-          </div>
-          <div className="text-right">
-            <h1 className="text-2xl font-extrabold text-primary">INVOICE</h1>
-            <p className="mt-1 text-lg font-semibold">{invoice.invoice_number}</p>
-            <p className="text-sm text-muted-foreground">Tanggal: {new Date(invoice.date).toLocaleDateString('id-ID')}</p>
-            {invoice.due_date && <p className="text-sm text-muted-foreground">Jatuh Tempo: {new Date(invoice.due_date).toLocaleDateString('id-ID')}</p>}
           </div>
         </div>
 
