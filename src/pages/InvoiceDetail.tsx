@@ -205,69 +205,79 @@ export default function InvoiceDetail() {
       </div>
 
       {/* Invoice Preview */}
-      <div ref={invoiceRef} className="mx-auto max-w-3xl rounded-xl border bg-card p-8 shadow-sm">
+      <div ref={invoiceRef} className="mx-auto max-w-[800px] rounded-xl bg-white p-10 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
         {/* Header */}
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-extrabold text-primary mb-1">INVOICE</h1>
-            <p className="text-lg font-semibold">{invoice.invoice_number}</p>
-            <p className="text-sm text-muted-foreground mt-1">Tanggal: {new Date(invoice.date).toLocaleDateString('id-ID')}</p>
-            {invoice.due_date && <p className="text-sm text-muted-foreground">Jatuh Tempo: {new Date(invoice.due_date).toLocaleDateString('id-ID')}</p>}
+        <div className="flex items-start justify-between gap-8">
+          {/* Left: Invoice title + institution info */}
+          <div className="space-y-1">
+            <h1 className="text-[28px] font-extrabold tracking-tight text-primary leading-none">INVOICE</h1>
+            <p className="mt-3 text-base font-semibold text-foreground">{institution?.name}</p>
+            {institution?.address && <p className="text-sm text-muted-foreground">{institution.address}</p>}
+            {institution?.email && <p className="text-sm text-muted-foreground">{institution.email}</p>}
+            {institution?.phone && <p className="text-sm text-muted-foreground">{institution.phone}</p>}
           </div>
-          <div className="text-right flex flex-col items-end gap-2">
+          {/* Right: Logo + invoice meta */}
+          <div className="flex flex-col items-end gap-3 shrink-0">
             {institution?.logo_url ? (
-              <img src={institution.logo_url} alt={institution.name} className="max-h-[60px] w-auto object-contain" />
+              <img src={institution.logo_url} alt={institution.name} className="h-[60px] w-auto object-contain max-w-[120px]" />
             ) : (
               <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10">
                 <Building2 className="h-7 w-7 text-primary" />
               </div>
             )}
-            <p className="font-semibold">{institution?.name}</p>
-            {institution?.address && <p className="text-sm text-muted-foreground">{institution.address}</p>}
-            {institution?.email && <p className="text-sm text-muted-foreground">{institution.email}</p>}
-            {institution?.phone && <p className="text-sm text-muted-foreground">{institution.phone}</p>}
+            <div className="text-right space-y-0.5">
+              <p className="text-sm font-bold text-foreground">{invoice.invoice_number}</p>
+              <p className="text-xs text-muted-foreground">Tanggal: {new Date(invoice.date).toLocaleDateString('id-ID')}</p>
+              {invoice.due_date && <p className="text-xs text-muted-foreground">Jatuh Tempo: {new Date(invoice.due_date).toLocaleDateString('id-ID')}</p>}
+            </div>
           </div>
         </div>
 
+        {/* Divider */}
+        <div className="my-7 h-px bg-border" />
+
         {/* Client */}
-        <div className="mb-6 rounded-lg bg-muted/50 p-4">
-          <p className="text-xs font-medium text-muted-foreground">KEPADA</p>
-          <p className="font-semibold">{invoice.client_name}</p>
+        <div className="mb-8 rounded-lg bg-muted/40 px-5 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Kepada</p>
+          <p className="text-base font-semibold text-foreground">{invoice.client_name}</p>
           {invoice.client_email && <p className="text-sm text-muted-foreground">{invoice.client_email}</p>}
         </div>
 
         {/* Items table */}
-        <table className="mb-6 w-full text-sm">
+        <table className="mb-8 w-full text-sm">
           <thead>
-            <tr className="border-b-2 border-primary/20">
-              <th className="py-2 text-left font-semibold">No</th>
-              <th className="py-2 text-left font-semibold">Deskripsi</th>
-              <th className="py-2 text-right font-semibold">Qty</th>
-              <th className="py-2 text-right font-semibold">Harga</th>
-              <th className="py-2 text-right font-semibold">Total</th>
+            <tr className="bg-primary text-primary-foreground">
+              <th className="rounded-tl-lg py-3 pl-4 text-left font-semibold text-xs uppercase tracking-wide w-12">No</th>
+              <th className="py-3 text-left font-semibold text-xs uppercase tracking-wide">Deskripsi</th>
+              <th className="py-3 pr-4 text-right font-semibold text-xs uppercase tracking-wide w-16">Qty</th>
+              <th className="py-3 pr-4 text-right font-semibold text-xs uppercase tracking-wide w-28">Harga</th>
+              <th className="rounded-tr-lg py-3 pr-4 text-right font-semibold text-xs uppercase tracking-wide w-28">Total</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className="border-b">
-                <td className="py-2">{item.item_no}</td>
-                <td className="py-2">{item.description}</td>
-                <td className="py-2 text-right">{item.quantity}</td>
-                <td className="py-2 text-right">Rp {Number(item.unit_price).toLocaleString('id-ID')}</td>
-                <td className="py-2 text-right">Rp {Number(item.total).toLocaleString('id-ID')}</td>
+            {items.map((item, idx) => (
+              <tr key={item.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
+                <td className="py-3 pl-4 text-muted-foreground">{item.item_no}</td>
+                <td className="py-3">{item.description}</td>
+                <td className="py-3 pr-4 text-right">{item.quantity}</td>
+                <td className="py-3 pr-4 text-right">Rp {Number(item.unit_price).toLocaleString('id-ID')}</td>
+                <td className="py-3 pr-4 text-right font-medium">Rp {Number(item.total).toLocaleString('id-ID')}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
         {/* Totals */}
-        <div className="ml-auto w-64 space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>Rp {Number(invoice.subtotal).toLocaleString('id-ID')}</span></div>
-          {Number(invoice.balance) > 0 && (
-            <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span>-Rp {Number(invoice.balance).toLocaleString('id-ID')}</span></div>
-          )}
-          <div className="flex justify-between border-t-2 pt-2 text-lg font-bold">
-            <span>Total</span><span>Rp {Number(invoice.total).toLocaleString('id-ID')}</span>
+        <div className="flex justify-end">
+          <div className="w-[280px] space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>Rp {Number(invoice.subtotal).toLocaleString('id-ID')}</span></div>
+            {Number(invoice.balance) > 0 && (
+              <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span>-Rp {Number(invoice.balance).toLocaleString('id-ID')}</span></div>
+            )}
+            <div className="border-t-2 border-primary/30 pt-3 mt-2" />
+            <div className="flex justify-between text-lg font-bold">
+              <span className="text-primary">Total</span><span>Rp {Number(invoice.total).toLocaleString('id-ID')}</span>
+            </div>
           </div>
         </div>
       </div>
