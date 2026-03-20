@@ -54,48 +54,78 @@ export default function InvoiceDetail() {
   const downloadPDF = async () => {
     if (!invoice || !institution) return;
     const doc = new jsPDF();
+    const pageW = doc.internal.pageSize.getWidth();
+    const marginL = 20;
+    const marginR = 20;
+    const contentW = pageW - marginL - marginR;
 
-    // Try to add logo
+    // Try to add logo — maintain aspect ratio
     if (institution.logo_url) {
       try {
         const base64 = await loadImageAsBase64(institution.logo_url);
         if (base64) {
-          doc.addImage(base64, 'PNG', 150, 10, 40, 20, undefined, 'FAST');
+          const img = new Image();
+          img.src = base64;
+          const maxLogoH = 22;
+          const maxLogoW = 45;
+          const ratio = img.naturalWidth / img.naturalHeight;
+          let logoW = maxLogoW;
+          let logoH = logoW / ratio;
+          if (logoH > maxLogoH) { logoH = maxLogoH; logoW = logoH * ratio; }
+          doc.addImage(base64, 'PNG', pageW - marginR - logoW, 15, logoW, logoH, undefined, 'FAST');
         }
-      } catch (e) {
-        // Logo failed to load, continue without it
-      }
+      } catch (e) { /* continue without logo */ }
     }
 
     // Header left
-    doc.setFontSize(20);
+    doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    doc.text('INVOICE', 14, 25);
+    doc.setTextColor(30, 100, 200);
+    doc.text('INVOICE', marginL, 28);
 
+    doc.setTextColor(60, 60, 60);
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(institution.name, 14, 35);
-    if (institution.address) doc.text(institution.address, 14, 41);
-    if (institution.email) doc.text(institution.email, 14, 47);
-    if (institution.phone) doc.text(institution.phone, 14, 53);
-
-    // Invoice number & dates on right (below logo)
     doc.setFont('helvetica', 'bold');
-    doc.text(invoice.invoice_number, 196, 38, { align: 'right' });
+    doc.text(institution.name, marginL, 38);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Tanggal: ${new Date(invoice.date).toLocaleDateString('id-ID')}`, 196, 45, { align: 'right' });
-    if (invoice.due_date) doc.text(`Jatuh Tempo: ${new Date(invoice.due_date).toLocaleDateString('id-ID')}`, 196, 51, { align: 'right' });
+    doc.setTextColor(120, 120, 120);
+    let instY = 44;
+    if (institution.address) { doc.text(institution.address, marginL, instY); instY += 5; }
+    if (institution.email) { doc.text(institution.email, marginL, instY); instY += 5; }
+    if (institution.phone) { doc.text(institution.phone, marginL, instY); instY += 5; }
+
+    // Invoice meta on right
+    const rightX = pageW - marginR;
+    doc.setTextColor(60, 60, 60);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text(invoice.invoice_number, rightX, 42, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Tanggal: ${new Date(invoice.date).toLocaleDateString('id-ID')}`, rightX, 48, { align: 'right' });
+    if (invoice.due_date) doc.text(`Jatuh Tempo: ${new Date(invoice.due_date).toLocaleDateString('id-ID')}`, rightX, 53, { align: 'right' });
+
+    // Divider
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.5);
+    doc.line(marginL, 62, rightX, 62);
 
     // Client
+    doc.setTextColor(120, 120, 120);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('Kepada:', 14, 65);
+    doc.text('KEPADA', marginL, 70);
+    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(invoice.client_name, 14, 71);
-    if (invoice.client_email) doc.text(invoice.client_email, 14, 77);
+    doc.text(invoice.client_name, marginL, 76);
+    if (invoice.client_email) { doc.setFontSize(9); doc.setTextColor(120, 120, 120); doc.text(invoice.client_email, marginL, 81); }
 
     // Table
     autoTable(doc, {
-      startY: 85,
+      startY: 90,
+      margin: { left: marginL, right: marginR },
       head: [['No', 'Deskripsi', 'Qty', 'Harga', 'Total']],
       body: items.map((item) => [
         item.item_no,
@@ -105,20 +135,46 @@ export default function InvoiceDetail() {
         `Rp ${Number(item.total).toLocaleString('id-ID')}`,
       ]),
       theme: 'striped',
-      headStyles: { fillColor: [30, 100, 200] },
+      headStyles: { fillColor: [30, 100, 200], fontSize: 9, cellPadding: 4 },
+      bodyStyles: { fontSize: 9, cellPadding: 4 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 15 },
+        2: { halign: 'right', cellWidth: 20 },
+        3: { halign: 'right', cellWidth: 35 },
+        4: { halign: 'right', cellWidth: 35 },
+      },
     });
 
     const finalY = (doc as any).lastAutoTable.finalY || 100;
 
-    // Totals
-    doc.setFontSize(10);
-    doc.text(`Subtotal: Rp ${Number(invoice.subtotal).toLocaleString('id-ID')}`, 196, finalY + 15, { align: 'right' });
+    // Totals — right aligned box
+    const totalsX = rightX - 70;
+    let tY = finalY + 15;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(120, 120, 120);
+    doc.text('Subtotal', totalsX, tY);
+    doc.setTextColor(40, 40, 40);
+    doc.text(`Rp ${Number(invoice.subtotal).toLocaleString('id-ID')}`, rightX, tY, { align: 'right' });
     if (Number(invoice.balance) > 0) {
-      doc.text(`Balance: Rp ${Number(invoice.balance).toLocaleString('id-ID')}`, 196, finalY + 22, { align: 'right' });
+      tY += 7;
+      doc.setTextColor(120, 120, 120);
+      doc.text('Balance', totalsX, tY);
+      doc.setTextColor(40, 40, 40);
+      doc.text(`-Rp ${Number(invoice.balance).toLocaleString('id-ID')}`, rightX, tY, { align: 'right' });
     }
+    tY += 3;
+    doc.setDrawColor(30, 100, 200);
+    doc.setLineWidth(0.8);
+    doc.line(totalsX, tY, rightX, tY);
+    tY += 8;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.text(`Total: Rp ${Number(invoice.total).toLocaleString('id-ID')}`, 196, finalY + 32, { align: 'right' });
+    doc.setTextColor(30, 100, 200);
+    doc.text('Total', totalsX, tY);
+    doc.setTextColor(40, 40, 40);
+    doc.text(`Rp ${Number(invoice.total).toLocaleString('id-ID')}`, rightX, tY, { align: 'right' });
 
     doc.save(`${invoice.invoice_number}.pdf`);
   };
