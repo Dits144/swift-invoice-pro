@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, Clock, Search, Image, ExternalLink } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Search, Eye, ExternalLink, X, FileText, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -14,9 +15,12 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewPayment, setPreviewPayment] = useState<any>(null);
 
   const fetchPayments = async () => {
-    // Admin can see all payments via RLS policy
     const { data } = await supabase.from('payments').select('*').order('created_at', { ascending: false });
     setPayments(data || []);
   };
@@ -43,8 +47,44 @@ export default function AdminDashboard() {
     fetchPayments();
   };
 
+  const handleViewProof = async (payment: any) => {
+    if (!payment.proof_url) {
+      toast.error('Tidak ada file bukti transfer.');
+      return;
+    }
+
+    setPreviewPayment(payment);
+    setPreviewLoading(true);
+    setPreviewOpen(true);
+    setPreviewUrl(null);
+
+    // proof_url could be a storage path or a full URL (legacy)
+    const proofPath = payment.proof_url;
+    const isFullUrl = proofPath.startsWith('http');
+
+    if (isFullUrl) {
+      // Legacy: proof_url is already a full URL, try using it directly
+      setPreviewUrl(proofPath);
+      setPreviewLoading(false);
+      return;
+    }
+
+    // Generate signed URL for private bucket
+    const { data, error } = await supabase.storage.from('payment_proofs').createSignedUrl(proofPath, 300); // 5 min
+    if (error || !data?.signedUrl) {
+      toast.error('Gagal memuat bukti transfer. File mungkin tidak ditemukan.');
+      setPreviewLoading(false);
+      return;
+    }
+
+    setPreviewUrl(data.signedUrl);
+    setPreviewLoading(false);
+  };
+
+  const isImageUrl = (url: string) => /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
+
   const filtered = payments.filter((p) => {
-    const matchSearch = p.payer_name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = p.payer_name?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -97,9 +137,18 @@ export default function AdminDashboard() {
                     <td className="p-3">Rp {Number(p.amount).toLocaleString('id-ID')}</td>
                     <td className="p-3 text-muted-foreground">{new Date(p.created_at).toLocaleDateString('id-ID')}</td>
                     <td className="p-3">
-                      <a href={p.proof_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-                        <Image className="h-4 w-4" /> Lihat
-                      </a>
+                      {p.proof_url ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewProof(p)}
+                          className="gap-1.5 h-8"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> Lihat Bukti
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Tidak ada file</span>
+                      )}
                     </td>
                     <td className="p-3">
                       <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -132,6 +181,53 @@ export default function AdminDashboard() {
           </table>
         </div>
       </div>
+
+      {/* Proof Preview Modal */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ImageIcon className="h-5 w-5" /> Bukti Transfer
+            </DialogTitle>
+          </DialogHeader>
+          {previewPayment && (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Nama: <strong className="text-foreground">{previewPayment.payer_name}</strong></span>
+                <span>{new Date(previewPayment.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              </div>
+            </div>
+          )}
+          <div className="mt-2 min-h-[200px] flex items-center justify-center rounded-lg border bg-muted/20">
+            {previewLoading ? (
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <span className="text-sm">Memuat...</span>
+              </div>
+            ) : previewUrl ? (
+              isImageUrl(previewUrl) ? (
+                <img src={previewUrl} alt="Bukti Transfer" className="max-h-[400px] w-auto rounded-lg object-contain" />
+              ) : (
+                <div className="flex flex-col items-center gap-3 p-6">
+                  <FileText className="h-12 w-12 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">File PDF</p>
+                </div>
+              )
+            ) : (
+              <p className="text-sm text-muted-foreground">File tidak ditemukan</p>
+            )}
+          </div>
+          {previewUrl && (
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" asChild className="gap-1.5">
+                <a href={previewUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" /> Buka di Tab Baru
+                </a>
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
